@@ -1,0 +1,9 @@
+version: "1.0"
+domain: "payment"
+stack: "java-vertx"
+registry: "local:reference/shared"
+
+agents:
+  overrides:
+    frontend-agent:
+      framework: "angular@16"

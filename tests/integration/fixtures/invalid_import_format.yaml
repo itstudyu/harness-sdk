@@ -1,0 +1,8 @@
+version: "1.0"
+domain: "payment"
+stack: "java-vertx"
+registry: "local:reference/shared"
+
+imports:
+  - "wrong-format"
+  - "shared@v1.2.0/rules/Rule_JWT"

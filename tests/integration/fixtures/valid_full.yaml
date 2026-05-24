@@ -1,0 +1,38 @@
+version: "1.0"
+domain: "payment"
+stack: "java-vertx"
+registry: "bitbucket.company.com/harness.git"
+
+imports:
+  - shared@v1.2.0/rules/Rule_JWT
+  - shared@v1.2.0/rules/Rule_ErrorFormat
+  - shared@v1.2.0/patterns/Pattern_JWT_Java
+  - shared@v1.2.0/ontology.yaml
+
+overrides:
+  Rule_JWT:
+    exceptions: ["/payment/webhook"]
+    approved_by: "@architect-kim"
+    approved_at: "2026-05-20"
+    justification: "외부 webhook 자체 서명 검증"
+
+local:
+  rules:
+    - rules/Rule_RefundTimeLimit.yaml
+  patterns:
+    - patterns/Pattern_RefundFlow.yaml
+
+agents:
+  subagents:
+    - frontend-agent
+    - backend-agent
+  tools:
+    - code-analyst
+  overrides:
+    frontend-agent:
+      framework: "angular@16"
+      approved_by: "@kim"
+      approved_at: "2026-05-24"
+      justification: "팀이 Angular 16 사용 중"
+  local:
+    - local/agents/mobile-agent.md

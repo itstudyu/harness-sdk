@@ -1,0 +1,4 @@
+version: "1.0"
+domain: "payment"
+stack: "java-vertx"
+registry: "local:reference/shared"

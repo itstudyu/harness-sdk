@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "harness-gen"
+version = "0.1.0"
+description = "Multi-agent 오케스트레이션 CLI scaffold (Karpathy LLM Wiki + GraphRAG + Harness SDKG)"
+requires-python = ">=3.11"
+authors = [{ name = "harness-sdk contributors" }]
+license = { text = "Proprietary" }
+dependencies = [
+    "PyYAML>=6.0",
+    "click>=8.1",
+]
+
+[project.scripts]
+harness-gen = "cli.__main__:cli"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
