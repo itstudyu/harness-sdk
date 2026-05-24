@@ -1,0 +1,10 @@
+task_slug: {{task_slug}}
+status: in_progress    # pending | in_progress | done | failed | abandoned
+started_at: "{{started_at_iso}}"
+finished_at: null
+mode: {{mode}}    # 단일 | 순차 | 병렬 | 병렬+contract-first
+agents:
+{{agents_yaml_list}}
+# 예시:
+#   - frontend-agent
+#   - backend-agent

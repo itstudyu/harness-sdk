@@ -1,0 +1,39 @@
+# {{role_title}} Plan
+
+## Subagent
+{{agent_name}}
+
+## Preloaded Skills
+{{preloaded_skills_list}}
+<!--
+manifest.yaml 의 해당 agent skills 필드 값.
+예시:
+- lint-checker
+-->
+
+## Shared Contract
+{{shared_contract_ref_or_empty}}
+<!--
+다중 agent 시만 작성:
+→ ../plan.md 의 "Shared Contract" 섹션 먼저 읽을 것
+-->
+
+## Implementation Tasks
+{{tasks_checklist}}
+<!--
+예시:
+- [ ] <구체적 task 1>
+- [ ] <구체적 task 2>
+-->
+
+## Self-Verification
+{{verification_steps}}
+<!--
+예시:
+- lint-checker → PASS 필요
+-->
+
+## Report to Main
+- 구현/수정 파일 목록
+- 검증 결과 (PASS/FAIL)
+- 발견 이슈 (1~2줄)

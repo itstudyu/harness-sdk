@@ -1,0 +1,42 @@
+# {{task_slug}}
+
+## Workflow
+1. [Implementation] {{agent_list}} 실행
+2. [Integration Verification] 메인이 통합 확인
+3. [Failure Handling] 실패 시 해당 agent 재호출
+
+## Execution Strategy
+Mode: {{mode}}    # 순차 | 병렬 | 병렬+contract-first
+Reason: {{reason}}
+
+## Shared Contract
+{{shared_contract_or_empty}}
+<!--
+인터페이스 공유 시만 작성. 예시:
+
+### API: POST /api/payment
+- Request:  { amount: number, currency: "KRW" | "USD" }
+- Response: { transactionId: string, status: "ok" | "failed" }
+
+### Types
+- `Payment` interface 정의 위치: shared/types/payment.ts
+-->
+
+## Subagents to Execute
+{{subagent_plan_list}}
+<!--
+예시:
+- frontend-plan.md
+- backend-plan.md
+-->
+
+## Dependencies
+{{dependencies_or_empty}}
+<!--
+예시:
+- frontend ↔ backend: Shared Contract만 공유, 그 외 독립
+- code-analyst → frontend: 분석 결과 활용
+-->
+
+## Notes
+{{notes_or_empty}}
