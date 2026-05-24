@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import click
 
+from cli.generate import generate_cmd
 from cli.init import init_cmd
 
 
@@ -24,6 +25,7 @@ def cli() -> None:
 
 
 cli.add_command(init_cmd)
+cli.add_command(generate_cmd)
 
 
 if __name__ == "__main__":
