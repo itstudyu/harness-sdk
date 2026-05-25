@@ -16,6 +16,7 @@ import click
 
 from cli.generate import generate_cmd
 from cli.init import init_cmd
+from cli.verify import verify_cmd
 
 
 @click.group(name="harness-gen")
@@ -26,6 +27,7 @@ def cli() -> None:
 
 cli.add_command(init_cmd)
 cli.add_command(generate_cmd)
+cli.add_command(verify_cmd)
 
 
 if __name__ == "__main__":
