@@ -51,6 +51,7 @@ def install_agents(
     tools: list[str],
     local_agent_paths: list[str],
     agent_overrides: dict[str, dict[str, Any]],
+    local_skill_paths: list[str] | None = None,
 ) -> list[AgentInstallation]:
     """모든 agent 를 변환 + 설치 + 의존 skill 까지. planner 는 항상 포함."""
     claude_dir = project_root / ".claude"
@@ -58,24 +59,105 @@ def install_agents(
     seen_names: set[str] = set()
     installations.append(_install_planner(registry, claude_dir=claude_dir))
     seen_names.add(PLANNER_NAME)
-    for name in subagents:
-        installations.append(
-            _install_named(name, registry, claude_dir=claude_dir, want_isolation=True)
-        )
-        seen_names.add(name)
-    for name in tools:
-        installations.append(
-            _install_named(name, registry, claude_dir=claude_dir, want_isolation=False)
-        )
-        seen_names.add(name)
-    for local_path in local_agent_paths:
-        installations.append(
-            _install_local(local_path, project_root=project_root, claude_dir=claude_dir)
-        )
-    # overrides 가 skills 를 append 할 수 있으므로 의존성 해결보다 먼저 적용 (HIGH 2 수정)
+    _install_requested(
+        installations, seen_names, registry,
+        project_root=project_root, claude_dir=claude_dir,
+        subagents=subagents, tools=tools,
+        local_agent_paths=local_agent_paths,
+        local_skill_paths=local_skill_paths or [],
+    )
     _apply_agent_overrides(installations, agent_overrides)
     _resolve_dependent_skills(installations, registry, claude_dir, seen_names)
     return installations
+
+
+def _install_requested(
+    installations: list[AgentInstallation],
+    seen_names: set[str],
+    registry: Registry,
+    *, project_root: Path, claude_dir: Path,
+    subagents: list[str], tools: list[str],
+    local_agent_paths: list[str], local_skill_paths: list[str],
+) -> None:
+    """planner 외 명시적으로 요청된 모든 agent/skill 을 설치."""
+    for name in subagents:
+        installations.append(_resolve_subagent(
+            name, registry, project_root=project_root,
+            claude_dir=claude_dir, local_agent_paths=local_agent_paths))
+        seen_names.add(name)
+    for name in tools:
+        installations.append(_install_named(
+            name, registry, claude_dir=claude_dir, want_isolation=False))
+        seen_names.add(name)
+    _install_local_artifacts(
+        installations, seen_names, project_root=project_root, claude_dir=claude_dir,
+        local_agent_paths=local_agent_paths, local_skill_paths=local_skill_paths)
+
+
+def _install_local_artifacts(
+    installations: list[AgentInstallation],
+    seen_names: set[str],
+    *, project_root: Path, claude_dir: Path,
+    local_agent_paths: list[str], local_skill_paths: list[str],
+) -> None:
+    """agents.local + local.skills 를 순차 설치 (중복 차단)."""
+    for local_path in local_agent_paths:
+        if _local_already_installed(local_path, installations):
+            continue
+        installations.append(_install_local(
+            local_path, project_root=project_root, claude_dir=claude_dir))
+        seen_names.add(Path(local_path).stem)
+    for local_skill in local_skill_paths:
+        installations.append(_install_local_skill(
+            local_skill, project_root=project_root, claude_dir=claude_dir))
+        seen_names.add(Path(local_skill).name)
+
+
+def _resolve_subagent(
+    name: str, registry: Registry, *, project_root: Path, claude_dir: Path,
+    local_agent_paths: list[str],
+) -> AgentInstallation:
+    """subagent 이름 → shared isolation 우선, 없으면 agents.local 에서 fallback (HIGH 2)."""
+    iso_path = registry.root / "agents" / "isolation" / f"{name}.md"
+    if iso_path.exists():
+        return _install_named(name, registry, claude_dir=claude_dir, want_isolation=True)
+    for lp in local_agent_paths:
+        candidate = (project_root / lp).resolve()
+        if candidate.exists() and candidate.stem == name:
+            return _install_local(lp, project_root=project_root, claude_dir=claude_dir)
+    raise FetcherError(
+        f"agent '{name}' 정의 없음. shared/agents/isolation/{name}.md 또는 "
+        f"agents.local 에 등록된 파일 중 stem={name} 확인."
+    )
+
+
+def _local_already_installed(local_path: str, installations: list[AgentInstallation]) -> bool:
+    """동일 source 가 이미 설치됐는지 (subagents fallback 으로 이미 들어왔을 수 있음)."""
+    return any(inst.source == local_path for inst in installations)
+
+
+def _install_local_skill(
+    local_path: str, *, project_root: Path, claude_dir: Path
+) -> AgentInstallation:
+    """프로젝트 내 local/skills/<X>/ → .claude/skills/<X>/ (SKILL.md 포함 폴더 통째 복사)."""
+    src_dir = (project_root / local_path).resolve()
+    if not src_dir.is_dir():
+        raise FetcherError(f"local.skills 디렉터리 없음: {src_dir}")
+    skill_md = src_dir / "SKILL.md"
+    if not skill_md.exists():
+        raise FetcherError(f"local skill 에 SKILL.md 없음: {skill_md}")
+    name = src_dir.name
+    dest_dir = claude_dir / "skills" / name
+    _copy_skill_unit(src_dir, dest_dir)
+    front = _read_frontmatter(dest_dir / "SKILL.md")
+    return AgentInstallation(
+        name=name,
+        install_kind="skill",
+        source=local_path,
+        location=str((dest_dir / "SKILL.md").relative_to(claude_dir.parent)),
+        description=front.get("description", ""),
+        tools=list(front.get("tools") or []),
+    )
 
 
 def _install_planner(registry: Registry, *, claude_dir: Path) -> AgentInstallation:

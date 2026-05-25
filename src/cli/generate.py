@@ -58,7 +58,7 @@ def _generate(project_root: Path, *, cache_dir: Path | None, ci: bool) -> None:
     ctx = _phase1_load_config(project_root, ci_mode=ci)
     nodes = _phase2_imports(ctx, cache_dir=cache_dir)
     _phase3_4_merge_and_override(ctx, nodes)
-    local_rule_ids = _phase5_local(ctx)
+    local_rule_ids = _phase5_local(ctx, nodes)
     installations = _phase6_install_agents(ctx)
     _phase7_claude_md(ctx, nodes, local_rule_ids, installations)
     _phase8_gitignore(project_root)
@@ -157,15 +157,28 @@ def _read_local_ontology(ctx: _Ctx) -> dict[str, Any] | None:
     return raw if isinstance(raw, dict) else None
 
 
-def _phase5_local(ctx: _Ctx) -> list[str]:
-    """Phase 5: local rules/patterns 파일을 .harness/<kind>/local/ 로 복사. local rule id 반환."""
+def _phase5_local(ctx: _Ctx, nodes: list[ImportedNode]) -> list[str]:
+    """Phase 5: local rules/patterns 파일을 .harness/<kind>/local/ 로 복사. local rule id 반환.
+
+    Section 3.3 invariant: 노드 id 는 글로벌 unique → import 한 rule id 와 충돌 시 에러 (HIGH 3).
+    """
     local = ctx.config.get("local") or {}
+    imported_rule_ids = {n.data.get("id") for n in nodes
+                         if n.kind == "rule" and isinstance(n.data, dict)}
     rule_ids: list[str] = []
     for rule_path in local.get("rules") or []:
-        rule_ids.append(_copy_local_node(ctx, rule_path, kind="rules"))
+        rid = _copy_local_node(ctx, rule_path, kind="rules")
+        if rid in imported_rule_ids:
+            raise click.ClickException(
+                f"local.rules 의 id '{rid}' 가 imports 한 rule 과 충돌 — id 변경 필요 ({rule_path})"
+            )
+        if rid in rule_ids:
+            raise click.ClickException(
+                f"local.rules 안에서 id '{rid}' 중복 ({rule_path})"
+            )
+        rule_ids.append(rid)
     for pat_path in local.get("patterns") or []:
         _copy_local_node(ctx, pat_path, kind="patterns")
-    _write_resolved_imports(ctx)
     return rule_ids
 
 
@@ -182,15 +195,10 @@ def _copy_local_node(ctx: _Ctx, rel_path: str, *, kind: str) -> str:
     return raw.get("id", src.stem) if isinstance(raw, dict) else src.stem
 
 
-def _write_resolved_imports(ctx: _Ctx) -> None:
-    """imports 결과를 .harness/rules/_resolved/, .harness/patterns/_resolved/ 에 dump."""
-    # 호출자 phase 에서 nodes 를 직접 받지 않으므로 placeholder — phase7 에서 함께 처리.
-    return
-
-
 def _phase6_install_agents(ctx: _Ctx) -> list:
-    """Phase 6: agent install + manifest 작성."""
+    """Phase 6: agent install + manifest 작성. local.skills 도 함께 설치."""
     agents = ctx.config.get("agents") or {}
+    local = ctx.config.get("local") or {}
     installations = install_agents(
         project_root=ctx.project_root,
         registry=ctx.registry,
@@ -198,6 +206,7 @@ def _phase6_install_agents(ctx: _Ctx) -> list:
         tools=list(agents.get("tools") or []),
         local_agent_paths=list(agents.get("local") or []),
         agent_overrides=dict(agents.get("overrides") or {}),
+        local_skill_paths=list(local.get("skills") or []),
     )
     write_manifest(installations, output_path=ctx.project_root / ".harness" / "agents" / "manifest.yaml")
     return installations
@@ -242,13 +251,14 @@ def _phase8_gitignore(project_root: Path) -> None:
 
 
 def _phase9_lockfile(ctx: _Ctx, nodes: list[ImportedNode], installations: list) -> None:
-    """Phase 9: .harness/.lock.yaml 작성 (재현 정보)."""
+    """Phase 9: .harness/.lock.yaml 작성 (재현 정보). bitbucket 모드면 HEAD commit 도 기록."""
     write_lockfile(
         LockInput(
             nodes=nodes,
             installations=installations,
             registry=ctx.registry_value,
             registry_mode=ctx.registry.mode,
+            registry_commit=getattr(ctx.registry, "commit", None),
         ),
         output_path=ctx.project_root / ".harness" / ".lock.yaml",
     )

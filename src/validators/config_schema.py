@@ -67,8 +67,20 @@ def validate_config(config: dict[str, Any], ci_mode: bool = False) -> ConfigVali
     if "version" in config:
         _check_version(config["version"], result.errors)
     _check_imports(config.get("imports", []), result.errors)
+    _check_local(config.get("local"), result.errors)
     _check_agents(config.get("agents", {}), ci_mode=ci_mode, result=result)
     return result
+
+
+def _check_local(local: Any, errors: list[str]) -> None:
+    """local: { rules, patterns, skills } — Section 5.1."""
+    if local is None:
+        return
+    if not isinstance(local, dict):
+        errors.append(f"'local' 는 map 이어야 함 (실제: {type(local).__name__})")
+        return
+    for fld in ("rules", "patterns", "skills"):
+        _check_string_list(local.get(fld), f"local.{fld}", errors)
 
 
 def _check_required(config: dict[str, Any], errors: list[str]) -> None:

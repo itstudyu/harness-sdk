@@ -102,24 +102,31 @@ def test_bitbucket_registry_requires_version(tmp_path: Path) -> None:
 def test_bitbucket_registry_clones_and_uses_cache(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """git clone 을 monkeypatch 로 가짜화: 호출 인자 검증 + cache 디렉터리 생성 모사."""
+    """git clone + HEAD rev-parse 검증: clone 명령 형식 + commit hash 캐치."""
     cache_root = tmp_path / "cache"
-    captured: dict = {}
+    calls: list[list[str]] = []
 
     def fake_run(cmd, check, capture_output, text):  # type: ignore[no-untyped-def]
-        captured["cmd"] = cmd
-        # 가짜 clone: shared 디렉터리 만들고 sentinel 파일 하나 둠
-        dest = Path(cmd[-1])
-        shared = dest / "reference" / "shared" / "rules"
-        shared.mkdir(parents=True, exist_ok=True)
-        (shared / "Rule_Demo.yaml").write_text("id: Rule_Demo\n", encoding="utf-8")
+        calls.append(list(cmd))
+        if "clone" in cmd:
+            dest = Path(cmd[-1])
+            shared = dest / "reference" / "shared" / "rules"
+            shared.mkdir(parents=True, exist_ok=True)
+            (shared / "Rule_Demo.yaml").write_text("id: Rule_Demo\n", encoding="utf-8")
 
-        class _Done:
+            class _Done:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+
+            return _Done()
+        # rev-parse HEAD: 가짜 hash 반환
+        class _Rev:
             returncode = 0
-            stdout = ""
+            stdout = "abc1234567890\n"
             stderr = ""
 
-        return _Done()
+        return _Rev()
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -131,9 +138,13 @@ def test_bitbucket_registry_clones_and_uses_cache(
     )
     assert reg.mode == "bitbucket"
     assert "v1.2.0" in str(reg.root)
-    # clone 명령 검증
-    assert captured["cmd"][:5] == ["git", "clone", "--depth", "1", "--branch"]
-    assert captured["cmd"][5] == "v1.2.0"
+    # 첫 호출 = clone 명령
+    assert calls[0][:5] == ["git", "clone", "--depth", "1", "--branch"]
+    assert calls[0][5] == "v1.2.0"
+    # 두 번째 호출 = rev-parse HEAD (재현성용 commit hash, HIGH 4)
+    assert calls[1][:2] == ["git", "-C"] and calls[1][-2:] == ["rev-parse", "HEAD"]
+    # Registry 에 commit hash 노출
+    assert reg.commit == "abc1234567890"
     # 실제 resolve 동작
     path = reg.resolve(parse_import("shared@v1.2.0/rules/Rule_Demo"))
     assert path.name == "Rule_Demo.yaml"

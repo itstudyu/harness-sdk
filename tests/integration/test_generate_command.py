@@ -174,6 +174,94 @@ def test_generate_wraps_fetcher_error_as_click_exception(tmp_path: Path) -> None
     assert "nonexistent-agent" in result.output
 
 
+def test_generate_local_skills_installed(tmp_path: Path) -> None:
+    """HIGH 1: local.skills 가 .claude/skills/<X>/ 로 설치되고 manifest 에 등록."""
+    _init_workspace(tmp_path)
+    skill_dir = tmp_path / "local" / "skills" / "my-validator"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: my-validator\ndescription: 프로젝트 전용 검증 도구.\n---\n# my-validator\n",
+        encoding="utf-8",
+    )
+    cfg_path = tmp_path / ".harness-config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text())
+    cfg["local"] = {"skills": ["local/skills/my-validator"]}
+    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True))
+    runner = CliRunner()
+    result = runner.invoke(generate_cmd, ["--project-root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".claude" / "skills" / "my-validator" / "SKILL.md").exists()
+    manifest = yaml.safe_load((tmp_path / ".harness" / "agents" / "manifest.yaml").read_text())
+    assert "my-validator" in manifest["agents"]
+    assert manifest["agents"]["my-validator"]["install_kind"] == "skill"
+
+
+def test_generate_subagent_falls_back_to_agents_local(tmp_path: Path) -> None:
+    """HIGH 2: subagents: 에 이름만 적었는데 shared 에 없으면 agents.local 에서 매칭."""
+    _init_workspace(tmp_path)
+    local_agent = tmp_path / "local" / "agents" / "mobile-agent.md"
+    local_agent.parent.mkdir(parents=True)
+    local_agent.write_text(
+        "---\nname: mobile-agent\ndescription: Mobile 전용 격리 agent.\n"
+        "tools: [Read, Write]\n---\n# Mobile Agent\n",
+        encoding="utf-8",
+    )
+    cfg_path = tmp_path / ".harness-config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text())
+    cfg["agents"]["subagents"] = ["mobile-agent"]
+    cfg["agents"]["local"] = ["local/agents/mobile-agent.md"]
+    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True))
+    runner = CliRunner()
+    result = runner.invoke(generate_cmd, ["--project-root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".claude" / "agents" / "mobile-agent.md").exists()
+    manifest = yaml.safe_load((tmp_path / ".harness" / "agents" / "manifest.yaml").read_text())
+    assert manifest["agents"]["mobile-agent"]["install_kind"] == "subagent"
+    # 중복 설치 없어야 함 — manifest 에 mobile-agent 가 단 1번만
+    assert sum(1 for k in manifest["agents"] if k == "mobile-agent") == 1
+
+
+def test_generate_local_rule_id_conflict_raises(tmp_path: Path) -> None:
+    """HIGH 3: local rule id 가 imports 한 rule id 와 충돌 → ClickException."""
+    _init_workspace(tmp_path)
+    # imports 에 reference seed 의 어떤 rule 도 없으므로, 인위적으로 id 충돌 시나리오 만들기 위해
+    # local rule 2개를 같은 id 로 작성 (local 내부 중복 충돌도 검출하는지 함께 검증)
+    local_dir = tmp_path / "local" / "rules"
+    local_dir.mkdir(parents=True)
+    (local_dir / "a.yaml").write_text("id: Rule_Same\nseverity: error\n", encoding="utf-8")
+    (local_dir / "b.yaml").write_text("id: Rule_Same\nseverity: warn\n", encoding="utf-8")
+    cfg_path = tmp_path / ".harness-config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text())
+    cfg["local"] = {"rules": ["local/rules/a.yaml", "local/rules/b.yaml"]}
+    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True))
+    runner = CliRunner()
+    result = runner.invoke(generate_cmd, ["--project-root", str(tmp_path)])
+    assert result.exit_code != 0
+    assert "Rule_Same" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_generate_lockfile_has_registry_commit_field(tmp_path: Path) -> None:
+    """HIGH 4: lockfile entry 에 commit 필드 (local 모드는 null)."""
+    _init_workspace(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(generate_cmd, ["--project-root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    lock = yaml.safe_load((tmp_path / ".harness" / ".lock.yaml").read_text())
+    # 새 필드 존재 (local 모드는 None)
+    assert "registry_commit" in lock
+    assert lock["registry_commit"] is None
+
+
+def test_generate_claude_md_marker_includes_install_kind_for_planner(tmp_path: Path) -> None:
+    """MEDIUM 5: CLAUDE.md planner 라인이 '(always, skill)' 패턴."""
+    _init_workspace(tmp_path)
+    runner = CliRunner()
+    runner.invoke(generate_cmd, ["--project-root", str(tmp_path)])
+    claude_md = (tmp_path / "CLAUDE.md").read_text()
+    assert "**planner** (always, skill)" in claude_md
+
+
 def test_generate_overrides_skill_append_installs_dependency(tmp_path: Path) -> None:
     """agents.overrides.<X>.skills 로 append 한 skill 도 실제로 .claude/skills/ 에 설치되어야 함.
 

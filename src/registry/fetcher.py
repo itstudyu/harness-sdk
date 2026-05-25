@@ -65,6 +65,7 @@ class Registry:
     mode: str                        # "local" or "bitbucket"
     version_warned: bool = False     # local 모드 version 무시 warning 1회용
     warnings: list[str] = None       # type: ignore[assignment]
+    commit: str | None = None        # bitbucket clone 후 HEAD commit hash (local 은 None)
 
     def __post_init__(self) -> None:
         if self.warnings is None:
@@ -156,7 +157,22 @@ def _bitbucket_registry(
                 f"clone 후에도 shared/ 없음: {shared_root} "
                 f"(registry 의 reference/shared/ 디렉터리 확인 필요)"
             )
-    return Registry(root=shared_root.resolve(), mode="bitbucket")
+    return Registry(
+        root=shared_root.resolve(), mode="bitbucket",
+        commit=_head_commit(cache_dir),
+    )
+
+
+def _head_commit(repo_dir: Path) -> str | None:
+    """clone 한 디렉터리의 HEAD commit hash. 실패 시 None (재현성용, 치명 X)."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(repo_dir), "rev-parse", "HEAD"],
+            check=True, capture_output=True, text=True,
+        )
+        return out.stdout.strip() or None
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
 
 
 def _repo_name(registry_value: str) -> str:

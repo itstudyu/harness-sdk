@@ -100,7 +100,7 @@ def _agents_section(p: ClaudeMdInput) -> str:
         return ""
     lines = ["## Installed Agents", ""]
     for inst in p.installations:
-        marker = "always" if inst.always_installed else inst.install_kind
+        marker = f"always, {inst.install_kind}" if inst.always_installed else inst.install_kind
         desc = inst.description.split(".")[0].strip()
         lines.append(f"- **{inst.name}** ({marker}): {desc}")
     lines.append("")

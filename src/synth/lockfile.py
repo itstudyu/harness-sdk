@@ -25,6 +25,7 @@ class LockInput:
     installations: list[AgentInstallation]
     registry: str
     registry_mode: str   # "local" | "bitbucket"
+    registry_commit: str | None = None  # bitbucket clone 후 HEAD hash (재현성, Section 11.3)
 
 
 def write_lockfile(
@@ -45,18 +46,20 @@ def _build(payload: LockInput, now: datetime) -> dict[str, Any]:
         "generated_by": GENERATED_BY,
         "registry": payload.registry,
         "registry_mode": payload.registry_mode,
-        "imports": [_import_entry(n) for n in payload.nodes],
+        "registry_commit": payload.registry_commit,
+        "imports": [_import_entry(n, payload.registry_commit) for n in payload.nodes],
         "agents": [_agent_entry(i) for i in payload.installations],
     }
 
 
-def _import_entry(n: ImportedNode) -> dict[str, Any]:
+def _import_entry(n: ImportedNode, commit: str | None) -> dict[str, Any]:
     return {
         "raw": n.ref.raw,
         "version": n.ref.version,
         "path": n.ref.path,
         "kind": n.kind,
         "id": n.data.get("id") if isinstance(n.data, dict) else None,
+        "commit": commit,
     }
 
 
