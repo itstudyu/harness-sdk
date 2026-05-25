@@ -16,6 +16,7 @@ import click
 
 from cli.generate import generate_cmd
 from cli.init import init_cmd
+from cli.plan import plan_group
 from cli.update import update_cmd
 from cli.verify import verify_cmd
 
@@ -30,6 +31,7 @@ cli.add_command(init_cmd)
 cli.add_command(generate_cmd)
 cli.add_command(verify_cmd)
 cli.add_command(update_cmd)
+cli.add_command(plan_group)
 
 
 if __name__ == "__main__":
