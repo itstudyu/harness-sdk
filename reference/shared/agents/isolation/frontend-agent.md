@@ -2,8 +2,8 @@
 name: frontend-agent
 description: Frontend 구현 전담 Subagent (격리된 context). Use when planner가 UI 컴포넌트, API 호출, 상태 관리, 라우팅, 스타일링, frontend 단위 테스트 작업을 위임할 때.
 tools: [Read, Write, Edit, Bash, Glob, Grep]
-skills:
-  - lint-checker
+# skills: 기본은 비어있음. 사용자가 .harness-config.yaml 의
+# agents.overrides.frontend-agent.skills 에 명시한 것만 preload 됨.
 ---
 
 # Frontend Agent
@@ -74,15 +74,18 @@ Glob "src/**/*"
 
 ### 4. 자기 검증
 
-구현 끝나면 preloaded skill 호출 (`skills:` frontmatter에 명시된 것만):
+preloaded skill 이 있으면 구현 후 모두 호출 (frontmatter `skills:` + 사용자 overrides 로 추가된 것).
+preloaded skill 이 **하나도 없으면 자기 검증 단계 skip** — 그 책임은 사용자에게 (선택한 skill 만큼만 검증).
 
+예시 (사용자가 `.harness-config.yaml` 에 lint-checker 추가한 경우):
 ```
 Skill(lint-checker) → 0 errors 필요
 ```
 
-추가 검증 skill이 필요하면 `.harness-config.yaml` 의 agents.overrides.frontend-agent.skills 에 append 해서 사용.
+추가 검증 skill 이 필요하면 `.harness-config.yaml` 의
+`agents.overrides.frontend-agent.skills` 에 append.
 
-실패 시:
+실패 시 (검증이 있을 때만):
 1. 에러 분석
 2. 자체 수정 시도
 3. 재검증
@@ -97,7 +100,7 @@ Skill(lint-checker) → 0 errors 필요
 완료
 - 신규 파일: <경로>
 - 수정 파일: <경로>
-- 검증: <skill 이름>(PASS)
+- 검증: <skill 이름>(PASS)   ← preloaded skill 없으면 "검증 skip (skill 미설정)"
 - 이슈: 없음
 ```
 

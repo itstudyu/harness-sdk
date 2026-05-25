@@ -52,25 +52,51 @@ def test_generate_minimal_no_imports(tmp_path: Path) -> None:
     assert (tmp_path / ".claude" / "skills" / "planner" / "templates" / "plan-multi.md.tmpl").exists()
 
 
-def test_generate_with_subagent_and_dependent_skill(tmp_path: Path) -> None:
-    """frontend-agent 선택 → frontend-agent.md + 의존 skill lint-checker 자동 설치."""
+def test_generate_with_subagent_does_not_auto_install_skills(tmp_path: Path) -> None:
+    """frontend-agent 선택만 → Subagent 설치되지만 lint-checker 등 skill 은 자동 설치 X.
+
+    정책: frontmatter 의 skills 는 비어있음. 사용자가 overrides 로 명시한 것만 설치.
+    """
     _init_workspace(tmp_path, subagents="frontend-agent")
     runner = CliRunner()
     result = runner.invoke(generate_cmd, ["--project-root", str(tmp_path)])
     assert result.exit_code == 0, result.output
-    # Subagent
+    # Subagent 자체는 설치
     assert (tmp_path / ".claude" / "agents" / "frontend-agent.md").exists()
-    # 의존 skill 자동 설치
-    assert (tmp_path / ".claude" / "skills" / "lint-checker" / "SKILL.md").exists()
+    # lint-checker 는 자동 설치 X (사용자 명시 안 함)
+    assert not (tmp_path / ".claude" / "skills" / "lint-checker").exists()
     # manifest 검증
     manifest = yaml.safe_load((tmp_path / ".harness" / "agents" / "manifest.yaml").read_text())
     assert manifest["agents"]["frontend-agent"]["install_kind"] == "subagent"
-    assert manifest["agents"]["lint-checker"]["install_kind"] == "skill"
+    assert "lint-checker" not in manifest["agents"]
     assert manifest["agents"]["planner"]["always_installed"] is True
     # CLAUDE.md 에 agent 목록 포함
     claude_md = (tmp_path / "CLAUDE.md").read_text()
     assert "frontend-agent" in claude_md
     assert "planner" in claude_md
+
+
+def test_generate_user_can_opt_in_lint_checker_via_overrides(tmp_path: Path) -> None:
+    """사용자가 overrides.skills 로 lint-checker 명시 → .claude/skills/lint-checker/ 설치."""
+    _init_workspace(tmp_path, subagents="frontend-agent")
+    cfg_path = tmp_path / ".harness-config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text())
+    cfg["agents"]["overrides"] = {
+        "frontend-agent": {
+            "skills": ["lint-checker"],
+            "approved_by": "@user",
+            "approved_at": "2026-05-25",
+        }
+    }
+    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True))
+    runner = CliRunner()
+    result = runner.invoke(generate_cmd, ["--project-root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    # 이번엔 설치됨
+    assert (tmp_path / ".claude" / "skills" / "lint-checker" / "SKILL.md").exists()
+    manifest = yaml.safe_load((tmp_path / ".harness" / "agents" / "manifest.yaml").read_text())
+    assert "lint-checker" in manifest["agents"]
+    assert "lint-checker" in manifest["agents"]["frontend-agent"]["skills_preloaded"]
 
 
 def test_generate_with_tool_skill(tmp_path: Path) -> None:

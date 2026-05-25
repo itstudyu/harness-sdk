@@ -2,8 +2,8 @@
 name: backend-agent
 description: Backend API 구현 전담 Subagent (격리된 context). Use when planner가 HTTP 엔드포인트, 비즈니스 로직, 데이터 접근, 인증/인가, 비동기 처리, backend 단위 테스트 작업을 위임할 때.
 tools: [Read, Write, Edit, Bash, Glob, Grep]
-skills:
-  - lint-checker
+# skills: 기본은 비어있음. 사용자가 .harness-config.yaml 의
+# agents.overrides.backend-agent.skills 에 명시한 것만 preload 됨.
 ---
 
 # Backend Agent
@@ -72,11 +72,16 @@ Glob "src/**/*"
 
 ### 4. 자기 검증
 
+preloaded skill 이 있으면 구현 후 모두 호출 (사용자 overrides 로 추가된 것 포함).
+preloaded skill 이 **하나도 없으면 자기 검증 skip** — 그 책임은 사용자에게.
+
+예시 (사용자가 lint-checker 를 켠 경우):
 ```
 Skill(lint-checker) → 0 errors 필요
 ```
 
-추가 검증 skill이 필요하면 `.harness-config.yaml` 의 agents.overrides.backend-agent.skills 에 append.
+추가 검증 skill 이 필요하면 `.harness-config.yaml` 의
+`agents.overrides.backend-agent.skills` 에 append.
 
 실패 시 → 자체 수정 → 재검증 (최대 3회).
 

@@ -7,8 +7,8 @@
 {{preloaded_skills_list}}
 <!--
 manifest.yaml 의 해당 agent skills 필드 값.
-예시:
-- lint-checker
+사용자가 .harness-config.yaml 의 agents.overrides.<agent>.skills 에
+명시한 것만 들어감. 기본은 비어있음 — 빈 리스트면 자기 검증 skip.
 -->
 
 ## Shared Contract
@@ -29,11 +29,12 @@ manifest.yaml 의 해당 agent skills 필드 값.
 ## Self-Verification
 {{verification_steps}}
 <!--
-예시:
-- lint-checker → PASS 필요
+preloaded skill 목록에서 도출. 비어있으면 "검증 skip (skill 미설정)" 로 둠.
+예시 (사용자가 .harness-config.yaml 에 어떤 skill 을 켰을 때):
+- <skill 이름> → PASS 필요
 -->
 
 ## Report to Main
 - 구현/수정 파일 목록
-- 검증 결과 (PASS/FAIL)
+- 검증 결과 (PASS/FAIL, 또는 "skip (skill 미설정)")
 - 발견 이슈 (1~2줄)
